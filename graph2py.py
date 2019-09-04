@@ -97,6 +97,9 @@ class AbstractGraph:
     def _isedge(self, v, u):
         pass
 
+    def _getneighbors(self, v):
+        pass
+
     def _writedegreeinfo(self, f):
         f.write('Número de vértices = {}\n'.format(self.n_nodes))
         f.write('Número de arestas  = {}\n'.format(self.n_edges))
@@ -105,12 +108,126 @@ class AbstractGraph:
         f.write('Grau máximo        = {}\n'.format(self.degree_max))
         f.write('Grau médio         = {}\n'.format(self.degree_mean))
 
+    def BFS(self, root, filename = None):
+        n_nodes = self.n_nodes
+
+        parent = np.full(n_nodes, -1, int)
+        level  = np.full(n_nodes, -1, int)
+
+        queue = deque()
+        queue.append(root)
+        
+        level[root - 1] = 0
+
+        while len(queue) >= 1:
+            v = queue.popleft()
+            neighbors = self._getneighbors(v)
+            for u in neighbors:
+                if level[u - 1] == -1:
+                    level[u - 1] = level[v - 1] + 1
+                    parent[u - 1] = v
+                    queue.append(u)
+
+        if filename:
+
+             with open(filename, 'w') as f:
+
+                bfs_tree = [(i,j) for i,j in zip(parent,level)]
+                f.write(repr(n_nodes) + '\n')
+                for node in bfs_tree:
+
+                    f.write(repr(node) + '\n')
+
+        return parent,level
+
+    def ConnectedComponents(self, filename = None):
+        discovered = 0
+
+        n_nodes = self.n_nodes
+
+        parent    = np.full(n_nodes, -1, int)
+        level     = np.full(n_nodes, -1, int)
+        component = np.full(n_nodes, -1, int)
+        components = []
+
+        while discovered < n_nodes:
+            root = getIndex(component, -1)
+
+            queue = deque()
+            queue.append(root + 1)
+
+            level[root] = 0
+            component[root] = root
+
+            discovered += 1
+
+            this = deque()
+            this.append(root)
+
+            while len(queue) >= 1:
+
+                v = queue.popleft()
+
+                neighbors = self._getneighbors(v)
+                for u in neighbors:
+                        if level[u - 1] == -1:
+                            discovered   += 1
+                            level[u - 1]     = level[v - 1] + 1
+                            parent[u - 1]    = v
+                            component[u - 1] = root
+                            this.append(u - 1)
+                            queue.append(u)
+
+            this.appendleft(len(this))
+            bis.insort(components, this)
+
+        if filename:
+
+             with open(filename, 'w') as f:
+                f.write(str(len(components)) + '\n \n')
+                for c in components[::-1]:
+                    for l in c:
+                        f.write(str(l) + '\n')
+                    f.write('\n')
+                f.write('\n')
+
+        return discovered, parent, level, component
+
+    def Diameter(self):
+
+        diameter = 0
+
+        for v in range(self.n_nodes):
+
+            temp     = max(self.BFS(v+1)[1])
+            diameter = max(temp, diameter)
+
+        return diameter
+
+    def Pseudo_diameter(self):
+
+        v = np.random.randint(1,self.n_nodes+1)
+
+        bfs_v = self.BFS(v)[1]
+
+        u = np.argmax(bfs_v) + 1
+        pseudo_diam = [0,0,bfs_v[u - 1]]
+
+        while pseudo_diam[-1] > pseudo_diam[-2] and pseudo_diam[-2] >= pseudo_diam[-3]:
+
+            bfs_u = self.BFS(self,u)[1]
+            u     = np.argmax(bfs_u) + 1
+            pseudo_diam += [bfs_u[u - 1]]
+
+        return pseudo_diam[-1]
+
     def save(self, filename):
         f = open(filename, 'w')
 
         self._writedegreeinfo(f)
 
         f.close()
+
 
 ## Here's the second Class - ArrayGraph
 
@@ -136,6 +253,8 @@ class ArrayGraph(AbstractGraph):
     def _isedge(self, v, u):
         return self.graph[v - 1, u - 1] and self.graph[v - 1, u - 1]
 
+    def _getneighbors(self, v):
+        return [u + 1 for u in range(self.n_nodes) if self._isedge(v, u + 1)]
 
 ## Here's the third Class - ListGraph
 
@@ -168,3 +287,6 @@ class ListGraph(AbstractGraph):
 
     def _isedge(self, v, u):
         return (u in self.graph[v - 1]) and (v in self.graph[u - 1])
+
+    def _getneighbors(self, v):
+        return self.graph[v - 1]
