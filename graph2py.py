@@ -230,6 +230,7 @@ class AbstractGraph:
 
         f.close()
    
+  
 # ---------------------------- 2nd Class ------------------------------
 
 class ArrayGraph(AbstractGraph):  
@@ -327,7 +328,7 @@ class AbstractWeightedGraph(AbstractGraph):
                     w_uv = self._getweight(v, u)
                     
                     if w_uv < 0:
-                        return " There's a negative weight edge between " + str(u,v)
+                        return " There's a negative weight edge between " + str(u) + " and " + str(v)
                     
                     if distance[u - 1] > distance[v - 1] + w_uv:
                         distance[u - 1] = distance[v - 1] + w_uv
@@ -457,4 +458,4 @@ class WeightedListGraph(ListGraph, AbstractWeightedGraph):
             u_idx = getIndex(self._getneighbors(v), u)
             return self.weights[v - 1][u_idx]
         else:
-            RaiseException("`v` and `u` aren't neighbors.")
+            RaiseException(str(u) + " and "+ str(v) " aren't neighbors.")
