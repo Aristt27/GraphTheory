@@ -51,19 +51,21 @@ class AbstractGraph:
 
         for v in range(self.n_nodes):
             d = self._getdegree(v + 1)
-            bis.insort(degrees, d)
+            bis.insort(degrees, (d,v))
 
+        degrees = list(zip(*degrees))
+        
         return degrees
-
+    
     def _finalize(self):
         self._savedegreeinfo()
 
     def _savedegreeinfo(self):
         degrees = self._getdegrees()
 
-        self.degree_min    = degrees[0]
-        self.degree_median = getSrtdSeqMedian(degrees)
-        self.degree_max    = degrees[-1]
+        self.degree_min    = degrees[0][0],degrees[1][0]
+        self.degree_median = getSrtdSeqMedian(degrees[0]),getSrtdSeqMedian(degrees[1])
+        self.degree_max    = degrees[0][-1],degrees[1][-1]
         self.degree_mean   = 2*self.n_edges/self.n_nodes
 
     def _writedegreeinfo(self, f):
@@ -76,6 +78,7 @@ class AbstractGraph:
 
     def BFS(self, root, filename = None):
         ' breadth first search '
+        
         n_nodes = self.n_nodes
 
         parent = np.full(n_nodes, -1, int)
@@ -229,7 +232,6 @@ class AbstractGraph:
         self._writedegreeinfo(f)
 
         f.close()
-   
   
 # ---------------------------- 2nd Class ------------------------------
 
@@ -298,25 +300,32 @@ class ListGraph(AbstractGraph):
 
 class AbstractWeightedGraph(AbstractGraph):
     
+    totalweight = 0
+    
     def _update(self, l):
         v,u,w = l.split()
         v = int(v)
         u = int(u)
         w = float(w)
+        if not self._isedge(u,v):
+            self.totalweight += w
         self._addedge(v, u, w)
-        
+            
     def _initialize(self, n_nodes):
         self.graph   = self._emptygraph(n_nodes)
         self.weights = self._emptyweights(n_nodes)
     
-    def Dijkstra(self, root):
+    def Dijkstra(self, root, target = False, path = False):
         n_nodes = self.n_nodes
 
         distance = np.full(n_nodes, np.Inf, float)
+        parent   = np.full(n_nodes, -1, int) 
         explored = np.full(n_nodes, False, bool)
-        priority_queue = []
-
+        
+        parent[root - 1]   = root 
         distance[root - 1] = 0
+        
+        priority_queue = []
         hpq.heappush(priority_queue, (0, root))
     
         while len(priority_queue) >= 1:
@@ -325,27 +334,45 @@ class AbstractWeightedGraph(AbstractGraph):
                 explored[v - 1] = True
                 neighbors = self._getneighbors(v)
                 for u in neighbors:
-                    w_uv = self._getweight(v, u)
+                    w_vu = self._getweight(v, u)
                     
-                    if w_uv < 0:
-                        return " There's a negative weight edge between " + str(u) + " and " + str(v)
+                    if w_vu < 0:
+                        raise Exception("Edge ({}, {}) has negative weight.".format(v,u))
                     
-                    if distance[u - 1] > distance[v - 1] + w_uv:
-                        distance[u - 1] = distance[v - 1] + w_uv
+                    if distance[u - 1] > distance[v - 1] + w_vu:
+                        distance[u - 1] = distance[v - 1] + w_vu
+                        parent[u - 1] = v 
                         hpq.heappush(priority_queue, (distance[u - 1], u))
+                        
+        if target:
+            
+            if path == True:
+                u = target
+                caminho = [u]
+                if  parent[u - 1] == -1:
+                    raise Exception("There is no path between ({} and {})." .format(root,target))
+                while(parent[u - 1] != root) :
+                    u = parent[u - 1]
+                    caminho.append(u)
+                caminho.append(root)
+                return distance[target-1],caminho[::-1]
+                
+            return distance[target-1]
 
-        return distance
+        return distance, parent 
     
-    def MST_Prim(self, root, ):
+    def MSTPrim2(self, root, filename = None):
     
         n_nodes  = self.n_nodes
 
         costs    = np.full(n_nodes, np.Inf, float)
+        parent   = np.full(n_nodes, -1, int) 
         explored = np.full(n_nodes, False, bool)
 
-        priority_queue = []
-
+        parent[root - 1]   = root
         costs[root - 1] = 0
+        
+        priority_queue = []
         hpq.heappush(priority_queue, (0, root))
 
         while len(priority_queue) >= 1:
@@ -359,14 +386,75 @@ class AbstractWeightedGraph(AbstractGraph):
 
                 for u in v_neighbors:
 
-                    w_vu = self._getweight(u, v)
+                    w_uv = self._getweight(u, v)
 
-                    if  costs[u - 1] > w_vu and explored[u-1] == False :
-                        costs[u - 1] = w_vu
+                    if  costs[u - 1] > w_uv and explored[u-1] == False:
+                        parent[u - 1] = v 
+                        costs[u - 1] = w_uv
                         hpq.heappush(priority_queue, (costs[u - 1], u))
+                        
+        if filename == True:
+            
+            pass
+            
+                        
+        return costs, sum(costs)
+    
+    def MSTPrim(self, root, filename = None):
+    
+        n_nodes  = self.n_nodes
+
+        costs    = np.full(n_nodes, np.Inf, float)
+        explored = np.full(n_nodes, False, bool)
+
+        costs[root - 1] = 0
+        
+        priority_queue = []
+        hpq.heappush(priority_queue, (0, root))
+        
+        if filename is not None:
+            
+            parent   = np.full(n_nodes, -1, int) 
+            parent[root - 1]   = root
+            
+            with open(filename + ".txt", 'w') as f:
+                f.write(str(n_nodes) + "\n")
+                
+                while len(priority_queue) >= 1:
+                    w, v = hpq.heappop(priority_queue)
+
+                    if not explored[v - 1]:
+                        explored[v - 1] = True
+                        neighbors = self._getneighbors(v)
+                        
+                        p = parent[v - 1]
+
+                        for u in neighbors:
+                            w_uv = self._getweight(u, v)
+                            if u == p and p != v:
+                                f.write(str(p) + " " + str(v) + " " + str(w_uv) + " " + "\n")
+                            if  costs[u - 1] > w_uv and explored[u - 1] == False:
+                                parent[u - 1] = v 
+                                costs[u - 1] = w_uv
+                                hpq.heappush(priority_queue, (costs[u - 1], u))
+        
+        else:
+            while len(priority_queue) >= 1:
+                    w, v = hpq.heappop(priority_queue)
+
+                    if not explored[v - 1]:
+                        explored[v - 1] = True
+                        v_neighbors = self._getneighbors(v)
+
+                        for u in v_neighbors:
+                            w_uv = self._getweight(u, v)
+
+                            if  costs[u - 1] > w_uv and explored[u-1] == False:
+                                costs[u - 1] = w_uv
+                                hpq.heappush(priority_queue, (costs[u - 1], u))
         return costs, sum(costs)
 
-    def Eccentricity(self, root):
+    def Eccentricity_slow(self, root):
         # Do Bellman-Ford then take max
         n_nodes = self.n_nodes
 
@@ -377,20 +465,59 @@ class AbstractWeightedGraph(AbstractGraph):
                 neighbors = self._getneighbors(v)
                 for u in neighbors:
                     distance[v - 1] = min(distance[v - 1], distance[u - 1] + self._getweight(v, u))
+        
+        verification = np.copy(distance)
+        for v in range(1, n_nodes + 1):
+                neighbors = self._getneighbors(v)
+                for u in neighbors:
+                    verification[v - 1] = min(verification[v - 1], verification[u - 1] + self._getweight(v, u))
+                    
+        if not np.array_equal(distance, verification):
+            raise Exception("Graph contains negative cycle.")
+            
+        return max(distance)
+    
+    
+    def Eccentricity(self, root):
+        n_nodes = self.n_nodes
+
+        distance = np.full(n_nodes, np.Inf, float)
+        explored = np.full(n_nodes, False, bool)
+        
+        distance[root - 1] = 0
+        
+        priority_queue = []
+        hpq.heappush(priority_queue, (0, root))
+    
+        while len(priority_queue) >= 1:
+            d, v = hpq.heappop(priority_queue)
+            if not explored[v - 1]:
+                explored[v - 1] = True
+                neighbors = self._getneighbors(v)
+                for u in neighbors:
+                    w_vu = self._getweight(v, u)
+                    
+                    if w_vu < 0:
+                        raise Exception("Edge ({}, {}) has negative weight.".format(v,u))
+                    
+                    if distance[u - 1] > distance[v - 1] + w_vu:
+                        distance[u - 1] = distance[v - 1] + w_vu
+                        
+                        hpq.heappush(priority_queue, (distance[u - 1], u))
 
         return max(distance)
     
     def Diameter(self):
-        return RaiseException("Undefined for Weighted Graphs.")
+        raise Exception("Undefined for Weighted Graphs.")
     
     def PseudoDiameter(self):
-        return RaiseException("Undefined for Weighted Graphs.")
+        raise Exception("Undefined for Weighted Graphs.")
     
     def BFS(self, root, filename = None):
-        return RaiseException("Undefined for Weighted Graphs.")
+        raise Exception("Undefined for Weighted Graphs.")
     
     def DFS(self, root, filename = None):
-        return RaiseException("Undefined for Weighted Graphs.")
+        raise Exception("Undefined for Weighted Graphs.")
 
 # ---------------------------- 5th Class ------------------------------
 
@@ -458,4 +585,4 @@ class WeightedListGraph(ListGraph, AbstractWeightedGraph):
             u_idx = getIndex(self._getneighbors(v), u)
             return self.weights[v - 1][u_idx]
         else:
-            RaiseException(str(u) + " and "+ str(v) " aren't neighbors.")
+            raise Exception("({}, {}) isn't an edge.".format(v, u))
